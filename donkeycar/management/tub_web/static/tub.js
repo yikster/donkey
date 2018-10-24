@@ -143,7 +143,8 @@ $(document).ready(function(){
             return Math.round(frames.length/16*i);
         })
         .map(function(frameIdx) {
-            return '<img class="clip-thumbnail" src="/tub_data/' + tubId + '/' + frames[frameIdx] + '_cam-image_array_.jpg" />';
+            return '<img class="clip-thumbnail" src="' + getImageUrl(tubId, frameIdx ) + '"/';
+
         })
         .join('');
 
