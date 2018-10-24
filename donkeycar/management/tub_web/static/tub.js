@@ -234,6 +234,8 @@ $(document).ready(function(){
 		});
     }
 
+    checkS3(tubId);
+
     getTub();
 
     $('button#play-stream').click(playBtnClicked);
