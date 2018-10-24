@@ -24,6 +24,9 @@ class WebServer(tornado.web.Application):
         data_path = ""
         bucket = ""
         prefix = ""
+        self.set_header("Access-Control-Allow-Origin", "*")
+        self.set_header("Access-Control-Allow-Headers", "x-requested-with")
+        self.set_header('Access-Control-Allow-Methods', 'POST, GET, OPTIONS')
         print(args)
         data_path = args[0]
         if not os.path.exists(data_path):
