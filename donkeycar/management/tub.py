@@ -8,19 +8,31 @@ import os, sys, time
 import json
 import tornado.web
 from stat import S_ISREG, ST_MTIME, ST_MODE, ST_CTIME, ST_ATIME
+import boto3
+import botocore
 
 
 class TubManager:
 
     def run(self, args):
-        WebServer(args[0]).start()
+        WebServer(args).start()
 
 
 class WebServer(tornado.web.Application):
 
-    def __init__(self, data_path):
+    def __init__(self, args):
+        data_path = ""
+        bucket = ""
+        prefix = ""
+        print(args)
+        data_path = args[0]
         if not os.path.exists(data_path):
             raise ValueError('The path {} does not exist.'.format(data_path))
+        if len(args) == 3:
+            bucket = args[1]
+            prefix = args[2]
+
+        print (data_path)
 
         this_dir = os.path.dirname(os.path.realpath(__file__))
         static_file_path = os.path.join(this_dir, 'tub_web', 'static')
@@ -29,9 +41,9 @@ class WebServer(tornado.web.Application):
 
         handlers = [
             (r"/", tornado.web.RedirectHandler, dict(url="/tubs")),
-            (r"/tubs", TubsView, dict(data_path=data_path)),
+            (r"/tubs", TubsView, dict(data_path=data_path, bucket=bucket, prefix=prefix)),
             (r"/tubs/?(?P<tub_id>[^/]+)?", TubView),
-            (r"/api/tubs/?(?P<tub_id>[^/]+)?", TubApi, dict(data_path=data_path)),
+            (r"/api/tubs/?(?P<tub_id>[^/]+)?", TubApi, dict(data_path=data_path , bucket=bucket, prefix=prefix)),
             (r"/static/(.*)", tornado.web.StaticFileHandler, {"path": static_file_path}),
             (r"/tub_data/(.*)", tornado.web.StaticFileHandler, {"path": data_path}),
             ]
@@ -49,14 +61,29 @@ class WebServer(tornado.web.Application):
 
 class TubsView(tornado.web.RequestHandler):
 
-    def initialize(self, data_path):
+    def initialize(self, data_path, bucket, prefix):
         self.data_path = data_path
+        self.bucket = bucket
+        if len(prefix) >0:
+            self.prefix = prefix[:-1]
 
     def get(self):
+
+        print ("data_path:" + self.data_path)
+        s3_dir_list = []
+        dir_list = []
+        if len(self.bucket) > 0 and len(self.prefix) > 0 :
+            s3 = boto3.client('s3')
+            result = s3.list_objects_v2(Bucket=self.bucket, Prefix=self.prefix, Delimiter="/")
+            for o in result.get('CommonPrefixes'):
+                print(o.get('Prefix')) 
+                s3_dir_list.append(o.get('Prefix'))
         import fnmatch
         dir_list = fnmatch.filter(os.listdir(self.data_path), '*')
+        
         dir_list.sort()
-        data = {"tubs": dir_list}
+        print (dir_list)
+        data = {"tubs": dir_list, "s3": self.bucket, "tubs-s3": s3_dir_list, "prefix": self.prefix}
         self.render("tub_web/tubs.html", **data)
 
 
@@ -69,20 +96,69 @@ class TubView(tornado.web.RequestHandler):
 
 class TubApi(tornado.web.RequestHandler):
 
-    def initialize(self, data_path):
+    def initialize(self, data_path, bucket, prefix):
         self.data_path = data_path
+        self.bucket = ""
+        self.prefix= ""
+        self.region = "ap-northeast-2"
+        self.is_s3 = False
+  
 
     def image_path(self, tub_path, frame_id):
-        return os.path.join(tub_path, str(frame_id) + "_cam-image_array_.jpg")
+        if self.is_s3:
+            return "https://s3." + self.region + "amazonaws.com/" + self.bucket + "/" + self.prefix + "/" + str(frame_id) + "_cam-image_array_.jpg"
+        else :
+            return os.path.join(tub_path, str(frame_id) + "_cam-image_array_.jpg")
 
     def record_path(self, tub_path, frame_id):
         return os.path.join(tub_path, "record_" + frame_id + ".json")
 
-    def clips_of_tub(self, tub_path):
-        seqs = [ int(f.split("_")[0]) for f in os.listdir(tub_path) if f.endswith('.jpg') ]
-        seqs.sort()
+    def get_s3_prefix(self, tub_path):
+        if self.is_s3:
+            return True
+        
+        print("tub_path=" + tub_path)
+        args = tub_path.split(",")
+        print(args)
 
-        entries = ((os.stat(self.image_path(tub_path, seq))[ST_ATIME], seq) for seq in seqs)
+        if len(args) == 4: # TODO add prefi check
+            self.bucket = args[1]
+            self.prefix = args[2] + "/" + args[3]
+            self.is_s3 = True
+            return True
+        else:
+            return False
+            
+
+
+    def get_seqs(self, tub_path):
+      
+        seqs = []
+            
+        if self.get_s3_prefix(tub_path):    
+            s3 = boto3.client('s3')
+            result = s3.list_objects_v2(Bucket=self.bucket, Prefix=self.prefix + "/record" )
+            for o in result["Contents"]:
+                seq = o.get('Key').split(".")[0].split("_")[-1] 
+                print(seq)
+                seqs.append(int(seq))
+        else:
+            seqs = [ int(f.split("_")[0]) for f in os.listdir(tub_path) if f.endswith('.jpg') ]
+
+        seqs.sort()
+        return seqs
+
+
+    def get_entries(self, tub_path, seqs):
+        if self.is_s3:
+            #return ((self.image_path(tub_path, seq), seq) for seq in seqs)
+            return ((seq, seq) for seq in seqs)
+        else:
+            return ((os.stat(self.image_path(tub_path, seq))[ST_ATIME], seq) for seq in seqs)
+
+    def clips_of_tub(self, tub_path):
+        seqs = self.get_seqs(tub_path)
+        entries = self.get_entries(tub_path, seqs)
 
         (last_ts, seq) = next(entries)
         clips = [[seq]]

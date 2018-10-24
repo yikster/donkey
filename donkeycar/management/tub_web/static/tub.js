@@ -1,6 +1,8 @@
 $(document).ready(function(){
     var tubId = window.location.href.split('/').slice(-1)[0];
-
+    var isS3 = false;
+    var bucket = "";
+    var prefix = "";
     var clips = [];
     var selectedClipIdx = 0;
     var currentFrameIdx = 0;
@@ -45,13 +47,42 @@ $(document).ready(function(){
             updateClipTable();
         });
     };
+    var checkS3 = function(tubId) {
+        if(isS3) return true;
+        str = tubId.split(",");
+        console.log(str)
+        if(str.length == 4) {
+        console.log(str.length)
 
+            bucket = str[1];
+            prefix = str[2] + "/" +str[3];
+            isS3 = true;
+        }
+        return false;
+    }
+    var getImageUrl = function (tubId, curFrame) {
+        console.log(checkS3(tubId))
+        if(checkS3(tubId)) {
+            console.log( "https://s3.ap-northeast-2.amazonaws.com/"+ bucket + "/" + prefix + "/" + curFrame + "_cam-image_array_.jpg")
+            return "https://s3.ap-northeast-2.amazonaws.com/"+ bucket + "/" + prefix + "/" + curFrame + "_cam-image_array_.jpg"
+        }
+        else 
+            return '/tub_data/' + tubId + '/' + curFrame + '_cam-image_array_.jpg';
+    }  
+
+    var getRecordUrl = function (tubId, curFrame) {
+        if(checkS3(tubId)) {
+            return "https://s3.ap-northeast-2.amazonaws.com/"+ bucket + "/" + prefix + "/record_" + curFrame + ".json"
+        }
+        else 
+            return '/tub_data/' + tubId + '/' + 'record_' + curFrame + '.json'
+    }
     // UI elements update
     var updateStreamImg = function() {
         var curFrame = selectedClip().frames[currentFrameIdx];
-        $('#img-preview').attr('src', '/tub_data/' + tubId + '/' + curFrame + '_cam-image_array_.jpg');
+        $('#img-preview').attr('src', getImageUrl(tubId, curFrame));
         $('#cur-frame').text(curFrame);
-        $.getJSON('/tub_data/' + tubId + '/' + 'record_' + curFrame + '.json', function(data) {
+        $.getJSON(getRecordUrl(tubId, curFrame) , function(data) {
             var angle = data["user/angle"];
             var steeringPercent = Math.round(Math.abs(angle) * 100) + '%';
             var steeringRounded = angle.toFixed(2)

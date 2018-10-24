@@ -6,7 +6,10 @@
 		<div class="container">
      <ul>
        {% for tub in tubs %}
-         <li><a href={{ "/tubs/" + escape(tub) }}>{{ escape(tub) }}</a></li>
+         <li><a href={{ "/tubs/" + escape(tub) }}>local file: {{ escape(tub) }}</a></li>
+       {% end %}
+       {% for tub in tubs %}
+         <li><a href={{ "/tubs/s3," + escape(s3) + "," + escape(prefix) + "," + escape(tub) }}>s3 file: {{ escape(prefix) + escape(tub) }}</a></li>
        {% end %}
      </ul>
 
