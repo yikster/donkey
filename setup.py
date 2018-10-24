@@ -33,6 +33,7 @@ setup(name='donkeycar',
                         'eventlet',
                         'moviepy',
                         'pandas',
+                        'boto3',
                         ],
 
       extras_require={
