@@ -36,6 +36,13 @@ $(document).ready(function(){
         }
         updateStreamControls();
     };
+    var preloadImages = function(tubId, clips) {
+         var images = new Array()
+         for(var i =0;i<clips.length;i++) {
+             images[i] = new Image();
+             images[i].src = getImageUrl(tubId, i);
+         }
+    }
 
     var getTub = function(tId, cb) {
         $.getJSON('/api/tubs/' + tubId, function( data ) {
@@ -43,6 +50,7 @@ $(document).ready(function(){
                 return {frames: clip, markedToDelete: false};
             });
             selectedClipIdx = 0;
+            preloadImages(tubId, clips);
             updateStreamImg();
             updateClipTable();
         });
@@ -57,6 +65,7 @@ $(document).ready(function(){
             bucket = str[1];
             prefix = str[2] + "/" +str[3];
             isS3 = true;
+            return true;
         }
         return false;
     }
@@ -217,7 +226,6 @@ $(document).ready(function(){
 		$.ajax({
 		    type: 'POST',
 		    url: '/api/tubs/' + tubId,
-		    data: JSON.stringify({clips: clipsToKeep}),
 		    contentType: "application/json",
 		    dataType: 'json',
             complete: function() {
