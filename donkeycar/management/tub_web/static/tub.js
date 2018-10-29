@@ -4,6 +4,7 @@ $(document).ready(function(){
     var bucket = "";
     var prefix = "";
     var clips = [];
+    var totalFrames = 0;
     var selectedClipIdx = 0;
     var currentFrameIdx = 0;
     var playing = null;
@@ -36,21 +37,17 @@ $(document).ready(function(){
         }
         updateStreamControls();
     };
-    var preloadImages = function(tubId, clips) {
-         var images = new Array()
-         for(var i =0;i<clips.length;i++) {
-             images[i] = new Image();
-             images[i].src = getImageUrl(tubId, i);
-         }
-    }
 
     var getTub = function(tId, cb) {
         $.getJSON('/api/tubs/' + tubId, function( data ) {
             clips = data.clips.map(function(clip) {
                 return {frames: clip, markedToDelete: false};
             });
+            
+            totalFrames = clips[0].frames[clips[0].frames.length - 1];
+            console.log("TotalFrames: " + totalFrames);
+
             selectedClipIdx = 0;
-            preloadImages(tubId, clips);
             updateStreamImg();
             updateClipTable();
         });
@@ -235,6 +232,36 @@ $(document).ready(function(){
 		});
     }
 
+
+    var currLoadIndex = 0;
+    var images = new Array()
+    var records = new Array()
+    var setRecordData = function() {
+        $.getJSON(getRecordUrl(tubId, currLoadIndex) , function(data) {
+            var angle = data["user/angle"];
+            var steeringPercent = Math.round(Math.abs(angle) * 100) + '%';
+            var steeringRounded = angle.toFixed(2)
+            records[currLoadIndex] = { "angle": angle, "streeringPercent": steeringPercent, "steeringRounded": steeringRounded};
+            console.log(records[currLoadIndex]);
+        });
+    }
+
+    var loadBtnClicked = function() {
+
+        while(currLoadIndex<=totalFrames) {
+             console.log('clicked:' + currLoadIndex)
+             images[currLoadIndex] = new Image();
+             images[currLoadIndex].src = getImageUrl(tubId, currLoadIndex);
+             setRecordData(tubId, currLoadIndex);
+             console.log(images[currLoadIndex]);
+             currLoadIndex ++;
+             if(currLoadIndex % 100 == 0) {
+                 setTimeout(loadBtnClicked, 200);
+                 break;
+             }
+         }
+    }
+
     checkS3(tubId);
 
     getTub();
@@ -243,6 +270,7 @@ $(document).ready(function(){
     $('button#split-stream').click(splitBtnClicked);
     $('button#rewind-stream').click(rewindBtnClicked);
     $('button#submit').click(submitBtnClicked);
+    $('button#load-data').click(loadBtnClicked);
     $(document).keydown(function(e) {
         switch(e.which) {
             case 32: // space
@@ -262,3 +290,5 @@ $(document).ready(function(){
         e.preventDefault(); // prevent the default action (scroll / move caret)
     });
 });
+
+

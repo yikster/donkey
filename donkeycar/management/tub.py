@@ -24,9 +24,6 @@ class WebServer(tornado.web.Application):
         data_path = ""
         bucket = ""
         prefix = ""
-        self.set_header("Access-Control-Allow-Origin", "*")
-        self.set_header("Access-Control-Allow-Headers", "x-requested-with")
-        self.set_header('Access-Control-Allow-Methods', 'POST, GET, OPTIONS')
         print(args)
         data_path = args[0]
         if not os.path.exists(data_path):
@@ -58,6 +55,7 @@ class WebServer(tornado.web.Application):
     def start(self, port=8886):
         self.port = int(port)
         self.listen(self.port)
+
         print('Listening on {}...'.format(port))
         tornado.ioloop.IOLoop.instance().start()
 
@@ -95,7 +93,9 @@ class TubView(tornado.web.RequestHandler):
     def get(self, tub_id):
         data = {}
         self.render("tub_web/tub.html", **data)
-
+        self.set_header("Access-Control-Allow-Origin", "*")
+        self.set_header("Access-Control-Allow-Headers", "x-requested-with")
+        self.set_header('Access-Control-Allow-Methods', 'POST, GET, OPTIONS')
 
 class TubApi(tornado.web.RequestHandler):
 
@@ -105,6 +105,9 @@ class TubApi(tornado.web.RequestHandler):
         self.prefix= ""
         self.region = "ap-northeast-2"
         self.is_s3 = False
+        self.set_header("Access-Control-Allow-Origin", "*")
+        self.set_header("Access-Control-Allow-Headers", "x-requested-with")
+        self.set_header('Access-Control-Allow-Methods', 'POST, GET, OPTIONS')
   
 
     def image_path(self, tub_path, frame_id):
@@ -131,18 +134,54 @@ class TubApi(tornado.web.RequestHandler):
             return True
         else:
             return False
-            
+       
+    def get_matching_s3_objects(self, bucket, prefix='', suffix=''):
+        s3 = boto3.client('s3')
+        kwargs = {'Bucket': bucket}
+
+        # If the prefix is a single string (not a tuple of strings), we can
+        # do the filtering directly in the S3 API.
+        if isinstance(prefix, str):
+            kwargs['Prefix'] = prefix
+
+        while True:
+
+            # The S3 API response is a large blob of metadata.
+            # 'Contents' contains information about the listed objects.
+            resp = s3.list_objects_v2(**kwargs)
+
+            try:
+                contents = resp['Contents']
+            except KeyError:
+                return
+
+            for obj in contents:
+                key = obj['Key']
+                if key.startswith(prefix) and key.endswith(suffix):
+                    yield obj
+
+            # The S3 API is paginated, returning up to 1000 keys at a time.
+            # Pass the continuation token into the next response, until we
+            # reach the final page (when this field is missing).
+            try:
+                kwargs['ContinuationToken'] = resp['NextContinuationToken']
+            except KeyError:
+                break
 
 
+    def get_matching_s3_keys(self, bucket, prefix='', suffix=''):
+        for obj in self.get_matching_s3_objects(bucket, prefix, suffix):
+            yield obj['Key']
+ 
     def get_seqs(self, tub_path):
       
         seqs = []
             
         if self.get_s3_prefix(tub_path):    
-            s3 = boto3.client('s3')
-            result = s3.list_objects_v2(Bucket=self.bucket, Prefix=self.prefix + "/record" )
-            for o in result["Contents"]:
-                seq = o.get('Key').split(".")[0].split("_")[-1] 
+            prefix = self.prefix + "/record"
+            result = self.get_matching_s3_keys(self.bucket, prefix, ".json")
+            for o in result:
+                seq = o.split(".")[0].split("_")[-1] 
                 print(seq)
                 seqs.append(int(seq))
         else:
@@ -162,11 +201,11 @@ class TubApi(tornado.web.RequestHandler):
     def clips_of_tub(self, tub_path):
         seqs = self.get_seqs(tub_path)
         entries = self.get_entries(tub_path, seqs)
-
+        print(len(seqs))
         (last_ts, seq) = next(entries)
         clips = [[seq]]
         for next_ts, next_seq in entries:
-            if next_ts - last_ts > 100:  #greater than 1s apart
+            if next_ts - last_ts > 5000:  #greater than 1s apart
                 clips.append([next_seq])
             else:
                 clips[-1].append(next_seq)
