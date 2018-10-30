@@ -1,4 +1,5 @@
 $(document).ready(function(){
+    var CF_URL = "http://doujuw4eh8d7e.cloudfront.net/"
     var tubId = window.location.href.split('/').slice(-1)[0];
     var isS3 = false;
     var bucket = "";
@@ -60,7 +61,8 @@ $(document).ready(function(){
         console.log(str.length)
 
             bucket = str[1];
-            prefix = str[2] + "/" +str[3];
+            // prefix = str[2] + "/" +str[3];
+            prefix = str[3];
             isS3 = true;
             return true;
         }
@@ -69,8 +71,10 @@ $(document).ready(function(){
     var getImageUrl = function (tubId, curFrame) {
         console.log(checkS3(tubId))
         if(checkS3(tubId)) {
-            console.log( "https://s3.ap-northeast-2.amazonaws.com/"+ bucket + "/" + prefix + "/" + curFrame + "_cam-image_array_.jpg")
-            return "https://s3.ap-northeast-2.amazonaws.com/"+ bucket + "/" + prefix + "/" + curFrame + "_cam-image_array_.jpg"
+            url = CF_URL + prefix + "/" + curFrame + "_cam-image_array_.jpg"
+            console.log( url )
+            // return "https://s3.ap-northeast-2.amazonaws.com/"+ bucket + "/" + prefix + "/" + curFrame + "_cam-image_array_.jpg"
+            return url;
         }
         else 
             return '/tub_data/' + tubId + '/' + curFrame + '_cam-image_array_.jpg';
@@ -78,7 +82,9 @@ $(document).ready(function(){
 
     var getRecordUrl = function (tubId, curFrame) {
         if(checkS3(tubId)) {
-            return "https://s3.ap-northeast-2.amazonaws.com/"+ bucket + "/" + prefix + "/record_" + curFrame + ".json"
+            url = CF_URL + prefix + "/record" + curFrame + ".json"
+            //return "https://s3.ap-northeast-2.amazonaws.com/"+ bucket + "/" + prefix + "/record_" + curFrame + ".json"
+            return url;
         }
         else 
             return '/tub_data/' + tubId + '/' + 'record_' + curFrame + '.json'
